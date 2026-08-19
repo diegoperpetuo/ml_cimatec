@@ -1,29 +1,144 @@
 from pathlib import Path
-
 from loguru import logger
-from tqdm import tqdm
-import typer
-
-from module_olist.config import PROCESSED_DATA_DIR, RAW_DATA_DIR
-
-app = typer.Typer()
+import pandas as pd
 
 
-@app.command()
-def main(
-    # ---- REPLACE DEFAULT PATHS AS APPROPRIATE ----
-    input_path: Path = RAW_DATA_DIR / "dataset.csv",
-    output_path: Path = PROCESSED_DATA_DIR / "dataset.csv",
-    # ----------------------------------------------
-):
-    # ---- REPLACE THIS WITH YOUR OWN CODE ----
-    logger.info("Processing dataset...")
-    for i in tqdm(range(10), total=10):
-        if i == 5:
-            logger.info("Something happened for iteration 5.")
-    logger.success("Processing dataset complete.")
-    # -----------------------------------------
+def load_data(order_path: Path, items_path: Path, customer_path: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """
+    Load data from CSV files and return as a tuple of DataFrames.
+
+    Args:
+        order_path (Path): Path to the orders CSV file.
+        items_path (Path): Path to the order items CSV file.
+        customer_path (Path): Path to the customers CSV file.
+
+    Returns:
+        tuple: A tuple containing DataFrames for orders, order items, and customers.
+    """
+    orders = pd.read_csv(
+        order_path,
+        parse_dates=["order_purchase_timestamp",
+                      "order_approved_at",
+                      "order_delivered_customer_date",
+                      "order_estimated_delivery_date"],
+    )
+
+    items = pd.read_csv(items_path)
+    customers = pd.read_csv(customer_path)
+
+    return orders, items, customers
+
+def save_dataset(dataset: pd.DataFrame, output_path: Path) -> None:
+    dataset.to_csv(output_path, index=False)
+    logger.success(f"Dataset saved to {output_path}")
+
+def create_target(orders: pd.DataFrame) -> pd.DataFrame:
+
+    # Seleciona apenas os pedidos que podem ser utilizados para construir
+    # o histórico de entregas atrasadas e realizadas dentro do prazo.
+    delivered_orders = orders.loc[
+        # Mantém somente pedidos que foram efetivamente entregues.
+        orders["order_status"].eq("delivered")
+
+        # Remove pedidos sem a data real em que o cliente recebeu a compra.
+        # Essa data é necessária para saber se o pedido atrasou.
+        & orders["order_delivered_customer_date"].notna()
+
+        # Remove pedidos sem a data de entrega prometida ao cliente.
+        # Sem essa informação, não é possível comparar o previsto com o realizado.
+        & orders["order_estimated_delivery_date"].notna()
+
+        # Mantém somente pedidos com a data de aprovação do pagamento.
+        # Esse é o momento definido para realizar a previsão.
+        & orders["order_approved_at"].notna()
+    ].copy()  # Cria uma cópia independente para evitar alterações no DataFrame original.
 
 
-if __name__ == "__main__":
-    app()
+    # Cria a variável-alvo do problema:
+    # 1 → pedido entregue depois da data prometida;
+    # 0 → pedido entregue dentro do prazo ou antes da data prometida.
+    delivered_orders["is_late"] = (
+        delivered_orders["order_delivered_customer_date"]
+        > delivered_orders["order_estimated_delivery_date"]
+    ).astype("int8")  # Armazena 0 e 1 usando um tipo inteiro que ocupa menos memória.
+
+
+    # Apresenta a quantidade total de pedidos antes da aplicação dos filtros.
+    logger.info(f"Pedidos originais: {len(orders):,}")
+
+
+    # Apresenta quantos pedidos permaneceram no recorte histórico.
+    logger.info(f"Pedidos no recorte histórico: {len(delivered_orders):,}")
+
+
+    # Mostra a quantidade de pedidos em cada classe:
+    # 0 = entregue no prazo;
+    # 1 = entregue com atraso.
+    logger.info(
+        delivered_orders["is_late"].value_counts(dropna=False)
+    )
+
+    return delivered_orders
+
+def aggregate_items(items: pd.DataFrame) -> pd.DataFrame:
+
+    # A tabela de itens possui uma linha para cada item presente no pedido.
+    # Portanto, um mesmo order_id pode aparecer várias vezes.
+    #
+    # Como o objetivo é construir uma base com uma linha por pedido,
+    # precisamos agrupar os itens antes de integrar essa tabela às demais.
+    items_agg = (
+        items.groupby(
+            "order_id",       # Agrupa todos os itens pertencentes ao mesmo pedido.
+            as_index=False,   # Mantém order_id como uma coluna comum.
+        )
+        .agg(
+            # Conta quantas linhas de itens existem em cada pedido.
+            # Um pedido com três produtos registrados terá item_count igual a 3.
+            item_count=("order_item_id", "count"),
+
+            # Conta quantos vendedores diferentes participam do pedido.
+            # O nunique evita contar o mesmo vendedor mais de uma vez.
+            seller_count=("seller_id", "nunique"),
+
+            # Soma os preços dos itens para obter o valor total dos produtos
+            # presentes no pedido.
+            total_price=("price", "sum"),
+
+            # Soma o frete de todos os itens para obter o valor total de frete
+            # associado ao pedido.
+            total_freight=("freight_value", "sum"),
+        )
+    )
+
+
+    # Verifica se cada pedido aparece somente uma vez após a agregação.
+    #
+    # Se a condição for falsa, o Python interromperá a execução e lançará
+    # um AssertionError. Essa checagem ajuda a garantir que a unidade de
+    # análise da nova tabela é realmente o pedido.
+    assert items_agg["order_id"].is_unique
+
+
+    # Exibe as cinco primeiras linhas da tabela agregada.
+    return items_agg
+
+
+def create_dataset(orders, items, customers):
+    orders = create_target(orders)
+    items_agg = aggregate_items(items)
+
+    data = orders.merge(
+        items_agg,
+        on="order_id",
+        how="left",
+        validate='one_to_one'  # Garante que cada pedido tenha no máximo uma linha em items_agg.
+    )
+
+    data = data.merge(
+        customers[["customer_id", "customer_city", "customer_state"]],
+        on="customer_id",
+        how="left",
+        validate='many_to_one'  # Garante que cada pedido tenha no máximo uma linha em customers.
+    )
+    return data
