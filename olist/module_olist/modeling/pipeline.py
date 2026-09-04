@@ -6,7 +6,7 @@ from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
 
 NUMERIC_FEATURES = [
-    "promise_days",
+    "promised_days",
     "item_count",
     "seller_count",
     "total_price",

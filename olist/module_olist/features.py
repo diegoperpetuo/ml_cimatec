@@ -47,13 +47,4 @@ def create_features(data: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-    # Conta quantos pedidos apresentam prazo prometido menor ou igual a zero.
-    #
-    # Esses casos seriam suspeitos porque significariam que a data prometida
-    # ocorreu antes ou exatamente no momento da aprovação do pagamento.
-    print(
-        "Prazos não positivos:",
-        data["promised_days"].le(0).sum()
-    )
-
     return data

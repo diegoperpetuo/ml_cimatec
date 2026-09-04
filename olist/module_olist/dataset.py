@@ -3,7 +3,7 @@ from loguru import logger
 import pandas as pd
 
 
-def load_data(order_path: Path, items_path: Path, customer_path: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def load_data(orders_path: Path, items_path: Path, customers_path: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     Load data from CSV files and return as a tuple of DataFrames.
 
@@ -16,7 +16,7 @@ def load_data(order_path: Path, items_path: Path, customer_path: Path) -> tuple[
         tuple: A tuple containing DataFrames for orders, order items, and customers.
     """
     orders = pd.read_csv(
-        order_path,
+        orders_path,
         parse_dates=["order_purchase_timestamp",
                       "order_approved_at",
                       "order_delivered_customer_date",
@@ -24,7 +24,7 @@ def load_data(order_path: Path, items_path: Path, customer_path: Path) -> tuple[
     )
 
     items = pd.read_csv(items_path)
-    customers = pd.read_csv(customer_path)
+    customers = pd.read_csv(customers_path)
 
     return orders, items, customers
 
