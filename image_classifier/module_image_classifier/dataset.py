@@ -1,29 +1,23 @@
-from pathlib import Path
+# Para redes neurais
 
-from loguru import logger
-from tqdm import tqdm
-import typer
+# Interface de alto nível para construir redes neurais
+from tensorflow import keras
 
-from module_image_classifier.config import PROCESSED_DATA_DIR, RAW_DATA_DIR
+# Carregar a base CIFAR
+(X_train, y_train), (X_test, y_test) = keras.datasets.cifar10.load_data()
 
-app = typer.Typer()
+# Normalizar os valores para um intervalo [0,1]
+X_train = X_train.astype("float32") / 255.0
+X_test = X_test.astype("float32") / 255.0
 
+# y vem como coluna.
+y_train = y_train.flatten()
+y_test = y_test.flatten()
 
-@app.command()
-def main(
-    # ---- REPLACE DEFAULT PATHS AS APPROPRIATE ----
-    input_path: Path = RAW_DATA_DIR / "dataset.csv",
-    output_path: Path = PROCESSED_DATA_DIR / "dataset.csv",
-    # ----------------------------------------------
-):
-    # ---- REPLACE THIS WITH YOUR OWN CODE ----
-    logger.info("Processing dataset...")
-    for i in tqdm(range(10), total=10):
-        if i == 5:
-            logger.info("Something happened for iteration 5.")
-    logger.success("Processing dataset complete.")
-    # -----------------------------------------
+class_names = ["avião", "automóvel", "pássaro", "gato", "cervo",
+               "cachorro", "sapo", "cavalo", "navio", "caminhão"]
 
-
-if __name__ == "__main__":
-    app()
+print(f"Formato de X_train: ", X_train.shape)
+print(f"Formato de y_train: ", y_train.shape)
+print(f"Formato de X_test: ", X_test.shape)
+print(f"Formato de y_test: ", y_test.shape)
