@@ -1,29 +1,51 @@
-from pathlib import Path
+from matplotlib import pyplot as plt
 
-from loguru import logger
-from tqdm import tqdm
-import typer
+from image_classifier.module_image_classifier.dataset import X_train, y_train, class_names
 
-from module_image_classifier.config import FIGURES_DIR, PROCESSED_DATA_DIR
+# Exemplos da base CIFAR-10
 
-app = typer.Typer()
+plt.figure(figsize=(10, 10))
+for i in range(9):
+    plt.subplot(3, 3, i + 1)
+    plt.imshow(X_train[i])
+    plt.title(class_names[y_train[i]])
+    plt.axis('off')
+plt.suptitle("Exemplos da base CIFAR-10.")
+plt.tight_layout()
+plt.show()
 
+# Acurácia e Loss
 
-@app.command()
-def main(
-    # ---- REPLACE DEFAULT PATHS AS APPROPRIATE ----
-    input_path: Path = PROCESSED_DATA_DIR / "dataset.csv",
-    output_path: Path = FIGURES_DIR / "plot.png",
-    # -----------------------------------------
-):
-    # ---- REPLACE THIS WITH YOUR OWN CODE ----
-    logger.info("Generating plot from data...")
-    for i in tqdm(range(10), total=10):
-        if i == 5:
-            logger.info("Something happened for iteration 5.")
-    logger.success("Plot generation complete.")
-    # -----------------------------------------
+plt.figure(figsize=(8, 5))
+plt.plot(history.history['accuracy'], label="Treino")
+plt.plot(history.history['val_accuracy'], label="Validação")
+plt.title("Acurácia por época")
+plt.xlabel("Épocas")
+plt.ylabel("Acurácia")
+plt.legend()
+plt.show()
 
+plt.figure(figsize=(8, 5))
+plt.plot(history.history['loss'], label="Treino")
+plt.plot(history.history['val_loss'], label="Validação")
+plt.title("Loss por época")
+plt.xlabel("Épocas")
+plt.ylabel("Loss")
+plt.legend()
+plt.show()
 
-if __name__ == "__main__":
-    app()
+# Previsões em imagens de teste
+
+pred_probs = model.predict(X_test[:9])
+pred_labels = np.argmax(pred_probs, axis=1)
+plt.figure(figsize=(10, 10))
+for i in range(9):
+    plt.subplot(3, 3, i+1)
+    plt.imshow(X_test[i])
+    real = class_names[y_test[i]]
+    pred = class_names[pred_labels[i]]
+    plt.title(f"Real: {real}\nPredição: {pred}")
+    plt.axis('off')
+plt.suptitle("Previsões em imagens do conjunto de teste")
+plt.tight_layout()
+plt.show()
